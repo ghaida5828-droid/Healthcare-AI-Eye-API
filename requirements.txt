@@ -3,6 +3,7 @@ uvicorn
 python-multipart
 numpy
 opencv-python
+mediapipe==0.10.21
 mediapipe
 scipy
 pyautogui
