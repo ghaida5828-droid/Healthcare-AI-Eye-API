@@ -162,6 +162,9 @@ async def process_frame(file: UploadFile = File(...)):
         "success": True,
         "face_detected": bool(face_detected),
         "blink": bool(blink_active),
+        "eye_spheres_calibrated": bool(eye_spheres_calibrated),
+         "raw_yaw": latest_raw_yaw,
+         "raw_pitch": latest_raw_pitch,
     }
 
 # =========================
@@ -364,6 +367,10 @@ BLINK_THRESHOLD_RATIO = 0.55
 
 
 blink_active = False
+# Live gaze values exposed to the web frontend
+latest_raw_yaw = None
+latest_raw_pitch = None
+eye_spheres_calibrated = False
 
 # reference matrices to fix coordinate flipping issue
 
@@ -1760,6 +1767,9 @@ def processing_loop():
     global latest_frame
     global blink_baseline
     global blink_calibration_count
+    global latest_raw_yaw
+    global latest_raw_pitch
+    global eye_spheres_calibrated
 
     while True:
         if latest_frame is None:
@@ -2078,6 +2088,9 @@ def processing_loop():
                 # ===== Write RAW gaze before screen clipping =====
 
                 write_raw_gaze(raw_yaw, raw_pitch)
+                latest_raw_yaw = float(raw_yaw)
+                latest_raw_pitch = float(raw_pitch)
+                eye_spheres_calibrated = True
 
 
 
