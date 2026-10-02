@@ -53,7 +53,9 @@ app.add_middleware(
         "https://healthcare-ai-demo-git-main-healthcare-ai-demo.vercel.app",
         "https://localhost:8443",
         "http://localhost:8443",
+        
     ],
+    allow_origin_regex=r"https://healthcare-ai-demo(?:-[a-zA-Z0-9-]+)?\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
