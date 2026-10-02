@@ -126,12 +126,115 @@ def analyze_web_frame(frame):
     )
 
     return True, bool(blink)
+# ============================================================
+# WEB GAZE ANALYSIS
+# Independent from blink detection.
+# Used by C6 on Render so it does not depend on background worker.
+# ============================================================
 
+web_gaze_face_mesh = None
+web_gaze_face_mesh_lock = threading.Lock()
+
+
+def analyze_web_gaze(frame):
+    global web_gaze_face_mesh
+
+    try:
+        with web_gaze_face_mesh_lock:
+            if web_gaze_face_mesh is None:
+                web_gaze_face_mesh = mp.solutions.face_mesh.FaceMesh(
+                    static_image_mode=False,
+                    max_num_faces=1,
+                    refine_landmarks=True,
+                    min_detection_confidence=0.5,
+                    min_tracking_confidence=0.5,
+                )
+
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            results = web_gaze_face_mesh.process(frame_rgb)
+
+        if not results.multi_face_landmarks:
+            return False, None, None
+
+        lm = results.multi_face_landmarks[0].landmark
+
+        # Iris centers
+        left_iris = lm[468]
+        right_iris = lm[473]
+
+        # Horizontal eye corners
+        left_outer = lm[33]
+        left_inner = lm[133]
+
+        right_inner = lm[362]
+        right_outer = lm[263]
+
+        # Vertical eyelid references
+        left_top = lm[159]
+        left_bottom = lm[145]
+
+        right_top = lm[386]
+        right_bottom = lm[374]
+
+        def safe_ratio(value, a, b):
+            low = min(a, b)
+            high = max(a, b)
+            span = high - low
+
+            if span < 1e-6:
+                return 0.5
+
+            return (value - low) / span
+
+        # Normalize iris position inside each eye.
+        left_x = safe_ratio(
+            left_iris.x,
+            left_outer.x,
+            left_inner.x,
+        )
+
+        right_x = safe_ratio(
+            right_iris.x,
+            right_inner.x,
+            right_outer.x,
+        )
+
+        left_y = safe_ratio(
+            left_iris.y,
+            left_top.y,
+            left_bottom.y,
+        )
+
+        right_y = safe_ratio(
+            right_iris.y,
+            right_top.y,
+            right_bottom.y,
+        )
+
+        avg_x = (left_x + right_x) / 2.0
+        avg_y = (left_y + right_y) / 2.0
+
+        # Frontend only needs stable numeric coordinates.
+        # Its own 4-point calibration learns the user's ranges.
+        raw_yaw = (avg_x - 0.5) * 100.0
+        raw_pitch = (avg_y - 0.5) * 100.0
+
+        if not (np.isfinite(raw_yaw) and np.isfinite(raw_pitch)):
+            return False, None, None
+
+        return True, float(raw_yaw), float(raw_pitch)
+
+    except Exception as e:
+        print("[WEB GAZE ERROR]", repr(e), flush=True)
+        return False, None, None
 
 @app.post("/process-frame")
 async def process_frame(file: UploadFile = File(...)):
     global latest_frame
     global blink_active
+    global latest_raw_yaw
+    global latest_raw_pitch
+    global eye_spheres_calibrated
 
     image_bytes = await file.read()
     np_array = np.frombuffer(image_bytes, np.uint8)
@@ -153,6 +256,13 @@ async def process_frame(file: UploadFile = File(...)):
     # long-eye-closure timing unreliable in the web UI.
     face_detected, blink = analyze_web_frame(frame)
     blink_active = blink if face_detected else False
+        # C6 gaze analysis - independent from blink logic
+    gaze_detected, web_yaw, web_pitch = analyze_web_gaze(frame)
+
+    if gaze_detected:
+        latest_raw_yaw = web_yaw
+        latest_raw_pitch = web_pitch
+        eye_spheres_calibrated = True
     write_value = 1 if blink_active else 0
     try:
         with open("blink.txt", "w") as f:
