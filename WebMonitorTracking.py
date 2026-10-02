@@ -2093,7 +2093,12 @@ def processing_loop():
                 latest_raw_yaw = float(raw_yaw)
                 latest_raw_pitch = float(raw_pitch)
                 eye_spheres_calibrated = True
-
+                print(
+                    "[GAZE DEBUG]",
+                    "yaw=", latest_raw_yaw,
+                    "pitch=", latest_raw_pitch,
+                    "spheres=", eye_spheres_calibrated,
+                )
 
 
                 # Draw combined gaze ray for visualization
@@ -2245,7 +2250,15 @@ def processing_loop():
         if key == ord('q'):
 
             break
-
+        print(
+            "[SPHERE DEBUG]",
+            "left_locked=", left_sphere_locked,
+            "right_locked=", right_sphere_locked,
+            "head_center=", 'head_center' in locals(),
+            "R_final=", 'R_final' in locals(),
+            "iris_left=", 'iris_3d_left' in locals(),
+            "iris_right=", 'iris_3d_right' in locals(),
+        )
         if not (left_sphere_locked and right_sphere_locked):
 
             current_nose_scale = compute_scale(nose_points_3d)
