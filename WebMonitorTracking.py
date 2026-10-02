@@ -643,7 +643,7 @@ def update_orbit_from_keys():
     global orbit_yaw, orbit_pitch, orbit_radius
 
     # Render has no keyboard/display. Skip desktop-only controls there.
-    if keyboard is None:
+    if HEADLESS or keyboard is None:
         return
 
     yaw_step   = math.radians(1.5)
@@ -1783,7 +1783,7 @@ def processing_loop():
 
 
         frame = latest_frame.copy()
-
+        print("[PIPE FRAME] got latest_frame", flush=True)
 
 
         h, w = frame.shape[:2]
