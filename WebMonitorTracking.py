@@ -45,8 +45,6 @@ import uvicorn
 
 app = FastAPI()
 
-app = FastAPI()
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -63,48 +61,107 @@ app.add_middleware(
 
 latest_frame = None
 
+# Dedicated FaceMesh instance for web frame requests.
+# Keeping it separate from the gaze worker avoids race conditions between
+# FastAPI requests and the background gaze-processing thread.
+web_face_mesh = None
+web_face_mesh_lock = threading.Lock()
+web_blink_baseline = None
+web_blink_calibration_count = 0
+WEB_BLINK_THRESHOLD_RATIO = 0.65
 
 
+def analyze_web_frame(frame):
+    """Analyze the exact uploaded frame and return face/blink state."""
+    global web_face_mesh
+    global web_blink_baseline
+    global web_blink_calibration_count
+
+    with web_face_mesh_lock:
+        if web_face_mesh is None:
+            web_face_mesh = mp.solutions.face_mesh.FaceMesh(
+                static_image_mode=False,
+                max_num_faces=1,
+                refine_landmarks=True,
+                min_detection_confidence=0.5,
+                min_tracking_confidence=0.5,
+            )
+
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        results = web_face_mesh.process(frame_rgb)
+
+    if not results.multi_face_landmarks:
+        return False, False
+
+    landmarks = results.multi_face_landmarks[0].landmark
+
+    left_distance = abs(
+        landmarks[LEFT_EYE_TOP].y - landmarks[LEFT_EYE_BOTTOM].y
+    )
+    right_distance = abs(
+        landmarks[RIGHT_EYE_TOP].y - landmarks[RIGHT_EYE_BOTTOM].y
+    )
+    current_eye_distance = (left_distance + right_distance) / 2.0
+
+    # Learn an open-eye baseline from the first 30 valid face frames.
+    # Using the maximum protects the baseline if a blink occurs during startup.
+    if web_blink_baseline is None:
+        web_blink_baseline = current_eye_distance
+        web_blink_calibration_count = 1
+    elif web_blink_calibration_count < 30:
+        web_blink_baseline = max(web_blink_baseline, current_eye_distance)
+        web_blink_calibration_count += 1
+
+    threshold = web_blink_baseline * WEB_BLINK_THRESHOLD_RATIO
+    blink = current_eye_distance < threshold
+
+    print(
+        "WEB BLINK:",
+        "eye=", round(current_eye_distance, 5),
+        "baseline=", round(web_blink_baseline, 5),
+        "threshold=", round(threshold, 5),
+        "closed=", blink,
+    )
+
+    return True, bool(blink)
 
 
 @app.post("/process-frame")
-
 async def process_frame(file: UploadFile = File(...)):
-
     global latest_frame
-
-
+    global blink_active
 
     image_bytes = await file.read()
-
     np_array = np.frombuffer(image_bytes, np.uint8)
-
     frame = cv2.imdecode(np_array, cv2.IMREAD_COLOR)
 
-
-
     if frame is None:
-
         return {
-
             "success": False,
-
-            "message": "Invalid frame"
-
+            "message": "Invalid frame",
+            "face_detected": False,
+            "blink": False,
         }
 
-
-
+    # Keep the latest frame available to the existing gaze worker.
     latest_frame = frame
 
-
+    # IMPORTANT: analyze THIS frame before responding. Previously the endpoint
+    # returned the old background-thread value of blink_active, which made
+    # long-eye-closure timing unreliable in the web UI.
+    face_detected, blink = analyze_web_frame(frame)
+    blink_active = blink if face_detected else False
+    write_value = 1 if blink_active else 0
+    try:
+        with open("blink.txt", "w") as f:
+            f.write(str(write_value))
+    except Exception as e:
+        print("Blink write error:", e)
 
     return {
-
-      "success": True,
-
-      "blink": bool(blink_active)
-
+        "success": True,
+        "face_detected": bool(face_detected),
+        "blink": bool(blink_active),
     }
 
 # =========================
