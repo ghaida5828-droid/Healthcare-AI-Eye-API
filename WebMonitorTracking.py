@@ -1795,7 +1795,7 @@ def processing_loop():
 
 
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
+        print("[PIPE DEBUG 0] before face_mesh.process", flush=True)
         results = face_mesh.process(frame_rgb)
         print("[PIPE DEBUG 1] face_mesh.process finished", flush=True)
 
