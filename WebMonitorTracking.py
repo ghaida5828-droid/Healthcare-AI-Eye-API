@@ -1,3 +1,5 @@
+
+from fastapi.middleware.cors import CORSMiddleware
 import cv2
 
 import numpy as np
@@ -43,7 +45,19 @@ import uvicorn
 
 app = FastAPI()
 
+app = FastAPI()
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://healthcare-ai-demo-phi.vercel.app",
+        "https://healthcare-ai-demo-62g6lseru-healthcare-ai-demo.vercel.app",
+        "https://healthcare-ai-demo-git-main-healthcare-ai-demo.vercel.app",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 latest_frame = None
 
