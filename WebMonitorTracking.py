@@ -53,6 +53,8 @@ app.add_middleware(
         "https://healthcare-ai-demo-phi.vercel.app",
         "https://healthcare-ai-demo-62g6lseru-healthcare-ai-demo.vercel.app",
         "https://healthcare-ai-demo-git-main-healthcare-ai-demo.vercel.app",
+        "https://localhost:8443",
+        "http://localhost:8443",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -1790,10 +1792,29 @@ def processing_loop():
             # ---------------------------------
 
             if open_eye_distance is not None:
+
                 threshold = open_eye_distance * 0.65
+                print(
+                    "BLINK DEBUG:",
+                    "eye=", round(current_eye_distance, 5),
+                    "baseline=", round(open_eye_distance, 5),
+                    "threshold=", round(threshold, 5),
+)
 
                 eye_is_closed = (
                     current_eye_distance < threshold
+                )
+                
+                # Debug: print the actual values
+                print(
+                    "EYE:",
+                    round(current_eye_distance, 5),
+                    "BASELINE:",
+                    round(open_eye_distance, 5),
+                    "THRESHOLD:",
+                    round(threshold, 5),
+                    "CLOSED:",
+                    eye_is_closed
                 )
 
                 if eye_is_closed:
@@ -1804,11 +1825,11 @@ def processing_loop():
                         print(
                             "BLINK!",
                             "eye=",
-                            round(current_eye_distance, 4),
+                            round(current_eye_distance, 5),
                             "baseline=",
-                            round(open_eye_distance, 4),
+                            round(open_eye_distance, 5),
                             "threshold=",
-                            round(threshold, 4)
+                            round(threshold, 5)
                         )
 
                     blink_active = True
